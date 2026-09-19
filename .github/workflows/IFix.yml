@@ -12,12 +12,11 @@ on:
       - ".github/workflows/IFix.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-
   IFix:
-    name: Build minimal AssetBundle patch
+    name: Build and save cache_res-patch.bytes
     runs-on: ubuntu-latest
 
     steps:
@@ -30,18 +29,11 @@ jobs:
         run: |
           set -e
 
-          echo "========================================"
-          echo "Checking asset"
-          echo "========================================"
+          test -f asset/cache_res
 
-          if [ ! -f "asset/cache_res" ]; then
-            echo "[ERROR] asset/cache_res not found"
-            exit 1
-          fi
-
+          echo "AssetBundle:"
           ls -lh asset/cache_res
 
-          echo ""
           echo "Header:"
           head -c 32 asset/cache_res | xxd
 
@@ -52,7 +44,7 @@ jobs:
 
           chmod +x tools/IFix.sh
 
-          ./tools/IFix.sh \
+          bash tools/IFix.sh \
             build \
             asset/cache_res \
             cache_res-patch.bytes
@@ -62,29 +54,43 @@ jobs:
         run: |
           set -e
 
-          if [ ! -f "cache_res-patch.bytes" ]; then
-            echo "[ERROR] Patch not created"
-            exit 1
-          fi
+          test -f cache_res-patch.bytes
 
-          echo "========================================"
-          echo "PATCH"
-          echo "========================================"
+          echo "================================"
+          echo "PATCH CREATED"
+          echo "================================"
+
+          ls -lh cache_res-patch.bytes
+          echo ""
 
           cat cache_res-patch.bytes
-
-          echo ""
-          echo "Patch size:"
-          wc -c cache_res-patch.bytes
 
           echo ""
           echo "SHA256:"
           sha256sum cache_res-patch.bytes
 
-      - name: Upload patch
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: cache_res-patch
           path: cache_res-patch.bytes
           if-no-files-found: error
           retention-days: 30
+
+      - name: Save patch to repository
+        shell: bash
+        run: |
+          set -e
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add cache_res-patch.bytes
+
+          if git diff --cached --quiet; then
+            echo "[IFix] No changes to cache_res-patch.bytes"
+            exit 0
+          fi
+
+          git commit -m "IFix: update cache_res-patch.bytes"
+          git push origin HEAD:main
