@@ -1,96 +1,55 @@
-name: IFix Build
+name: IFix Binary Build
 
 on:
   workflow_dispatch:
-
   push:
     branches:
       - main
     paths:
-      - "asset/cache_res"
-      - "tools/IFix.sh"
-      - ".github/workflows/IFix.yml"
+      - asset/cache_res
+      - tools/IFix.sh
+      - .github/workflows/IFix.yml
 
 permissions:
   contents: write
 
 jobs:
-  IFix:
-    name: Build and save cache_res-patch.bytes
+  build:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v4
 
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Check AssetBundle
+      - name: Build IFXB
         shell: bash
         run: |
-          set -e
-
-          test -f asset/cache_res
-
-          echo "AssetBundle:"
-          ls -lh asset/cache_res
-
-          echo "Header:"
-          head -c 32 asset/cache_res | xxd
-
-      - name: Run IFix
-        shell: bash
-        run: |
-          set -e
-
           chmod +x tools/IFix.sh
+          bash tools/IFix.sh build asset/cache_res cache_res-patch.bytes
 
-          bash tools/IFix.sh \
-            build \
-            asset/cache_res \
-            cache_res-patch.bytes
-
-      - name: Verify patch
-        shell: bash
+      - name: Verify binary
         run: |
-          set -e
-
           test -f cache_res-patch.bytes
-
-          echo "================================"
-          echo "PATCH CREATED"
-          echo "================================"
-
-          ls -lh cache_res-patch.bytes
-          echo ""
-
-          cat cache_res-patch.bytes
-
-          echo ""
-          echo "SHA256:"
+          test "$(head -c 4 cache_res-patch.bytes)" = "IFXB"
+          file cache_res-patch.bytes
+          xxd -l 64 cache_res-patch.bytes
           sha256sum cache_res-patch.bytes
 
-      - name: Upload artifact
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: cache_res-patch
           path: cache_res-patch.bytes
-          if-no-files-found: error
-          retention-days: 30
 
-      - name: Save patch to repository
+      - name: Commit result
         shell: bash
         run: |
-          set -e
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           git add -f cache_res-patch.bytes
 
           if git diff --cached --quiet; then
-            echo "[IFix] No changes to cache_res-patch.bytes"
             exit 0
           fi
 
-          git commit -m "IFix: update cache_res-patch.bytes"
+          git commit -m "IFix: update binary patch"
           git push origin HEAD:main
