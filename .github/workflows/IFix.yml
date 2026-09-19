@@ -2,6 +2,7 @@ name: IFix Build
 
 on:
   workflow_dispatch:
+
   push:
     branches:
       - main
@@ -11,50 +12,79 @@ on:
       - ".github/workflows/IFix.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+
   IFix:
+    name: Build minimal AssetBundle patch
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check asset
+      - name: Check AssetBundle
+        shell: bash
         run: |
+          set -e
+
+          echo "========================================"
+          echo "Checking asset"
+          echo "========================================"
+
           if [ ! -f "asset/cache_res" ]; then
-            echo "ERROR: asset/cache_res not found"
+            echo "[ERROR] asset/cache_res not found"
             exit 1
           fi
+
           ls -lh asset/cache_res
 
-      - name: Run IFix
-        run: |
-          chmod +x tools/IFix.sh
-          ./tools/IFix.sh
+          echo ""
+          echo "Header:"
+          head -c 32 asset/cache_res | xxd
 
-      - name: Verify output
+      - name: Run IFix
+        shell: bash
         run: |
-          test -f cache_res-patch.bytes
-          ls -lh cache_res-patch.bytes
+          set -e
+
+          chmod +x tools/IFix.sh
+
+          ./tools/IFix.sh \
+            build \
+            asset/cache_res \
+            cache_res-patch.bytes
+
+      - name: Verify patch
+        shell: bash
+        run: |
+          set -e
+
+          if [ ! -f "cache_res-patch.bytes" ]; then
+            echo "[ERROR] Patch not created"
+            exit 1
+          fi
+
+          echo "========================================"
+          echo "PATCH"
+          echo "========================================"
+
+          cat cache_res-patch.bytes
+
+          echo ""
+          echo "Patch size:"
+          wc -c cache_res-patch.bytes
+
+          echo ""
+          echo "SHA256:"
           sha256sum cache_res-patch.bytes
 
-      - name: Upload artifact
+      - name: Upload patch
         uses: actions/upload-artifact@v4
         with:
           name: cache_res-patch
           path: cache_res-patch.bytes
           if-no-files-found: error
-
-      - name: Commit output
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add cache_res-patch.bytes
-          if git diff --cached --quiet; then
-            echo "No changes"
-          else
-            git commit -m "IFix build cache_res-patch.bytes"
-            git push origin HEAD:main
-          fi
+          retention-days: 30

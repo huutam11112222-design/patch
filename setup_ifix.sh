@@ -2,6 +2,17 @@
 
 set -e
 
+echo "========================================"
+echo "        IFix - Setup Generator"
+echo "========================================"
+
+mkdir -p tools .github/workflows asset
+
+cat > tools/IFix.sh <<'SH'
+#!/data/data/com.termux/files/usr/bin/bash
+
+set -e
+
 SRC="${2:-asset/cache_res}"
 PATCH="${3:-cache_res-patch.bytes}"
 
@@ -187,3 +198,119 @@ case "${1:-}" in
         ;;
 
 esac
+SH
+
+chmod +x tools/IFix.sh
+
+cat > .github/workflows/IFix.yml <<'YML'
+name: IFix Build
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+    paths:
+      - "asset/cache_res"
+      - "tools/IFix.sh"
+      - ".github/workflows/IFix.yml"
+
+permissions:
+  contents: read
+
+jobs:
+
+  IFix:
+    name: Build minimal AssetBundle patch
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check AssetBundle
+        shell: bash
+        run: |
+          set -e
+
+          echo "========================================"
+          echo "Checking asset"
+          echo "========================================"
+
+          if [ ! -f "asset/cache_res" ]; then
+            echo "[ERROR] asset/cache_res not found"
+            exit 1
+          fi
+
+          ls -lh asset/cache_res
+
+          echo ""
+          echo "Header:"
+          head -c 32 asset/cache_res | xxd
+
+      - name: Run IFix
+        shell: bash
+        run: |
+          set -e
+
+          chmod +x tools/IFix.sh
+
+          ./tools/IFix.sh \
+            build \
+            asset/cache_res \
+            cache_res-patch.bytes
+
+      - name: Verify patch
+        shell: bash
+        run: |
+          set -e
+
+          if [ ! -f "cache_res-patch.bytes" ]; then
+            echo "[ERROR] Patch not created"
+            exit 1
+          fi
+
+          echo "========================================"
+          echo "PATCH"
+          echo "========================================"
+
+          cat cache_res-patch.bytes
+
+          echo ""
+          echo "Patch size:"
+          wc -c cache_res-patch.bytes
+
+          echo ""
+          echo "SHA256:"
+          sha256sum cache_res-patch.bytes
+
+      - name: Upload patch
+        uses: actions/upload-artifact@v4
+        with:
+          name: cache_res-patch
+          path: cache_res-patch.bytes
+          if-no-files-found: error
+          retention-days: 30
+YML
+
+echo ""
+echo "========================================"
+echo "       IFix files created"
+echo "========================================"
+
+echo ""
+echo "[1] tools/IFix.sh"
+echo "[2] .github/workflows/IFix.yml"
+
+echo ""
+echo "Test:"
+echo "./tools/IFix.sh build asset/cache_res cache_res-patch.bytes"
+
+echo ""
+echo "Apply:"
+echo "./tools/IFix.sh apply asset/cache_res cache_res-patch.bytes cache_res-fixed"
+
+echo ""
+echo "DONE"
