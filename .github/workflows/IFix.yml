@@ -1,0 +1,25 @@
+name: IFix
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: IFix
+        run: |
+          chmod +x tools/IFix.sh
+          ./tools/IFix.sh
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: cache_res-patch
+          path: cache_res-patch.bytes
