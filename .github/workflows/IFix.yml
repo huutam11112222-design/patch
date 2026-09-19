@@ -1,25 +1,60 @@
-name: IFix
+name: IFix Build
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
+    paths:
+      - "asset/cache_res"
+      - "tools/IFix.sh"
+      - ".github/workflows/IFix.yml"
+
+permissions:
+  contents: write
 
 jobs:
-  build:
+  IFix:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: IFix
+      - name: Check asset
+        run: |
+          if [ ! -f "asset/cache_res" ]; then
+            echo "ERROR: asset/cache_res not found"
+            exit 1
+          fi
+          ls -lh asset/cache_res
+
+      - name: Run IFix
         run: |
           chmod +x tools/IFix.sh
           ./tools/IFix.sh
 
-      - name: Upload
+      - name: Verify output
+        run: |
+          test -f cache_res-patch.bytes
+          ls -lh cache_res-patch.bytes
+          sha256sum cache_res-patch.bytes
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: cache_res-patch
           path: cache_res-patch.bytes
+          if-no-files-found: error
+
+      - name: Commit output
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cache_res-patch.bytes
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "IFix build cache_res-patch.bytes"
+            git push origin HEAD:main
+          fi
