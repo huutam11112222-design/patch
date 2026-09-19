@@ -1,4 +1,4 @@
-#!/system/bin/sh
+#!/bin/sh
 
 SRC="asset/cache_res"
 OUT="cache_res-patch.bytes"
